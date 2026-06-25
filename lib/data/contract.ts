@@ -127,6 +127,11 @@ export interface BeliefAdapter {
   readonly fixture: FixtureMeta;
   /** Begin emitting ticks; returns a disposer that stops emission. */
   start(onTick: (tick: BeliefTick) => void): () => void;
+  /**
+   * Pinned Merkle proof for a captured odds messageId, if this source has one
+   * (replay pins them at record time; live fetches them; the stub has none).
+   */
+  getProof?(oddsMessageId: string): MerkleProof | null;
 }
 
 /**

@@ -1,6 +1,7 @@
 /**
- * Belief-field shaders (GLSL ES 1.00 — runs on WebGL1 and WebGL2 for the widest
- * device coverage; no float render targets, no separate bloom pass).
+ * Belief-field shaders (GLSL ES 3.00 — OGL's Renderer runs on a WebGL2 context,
+ * which is universal on current devices; no float render targets, no separate
+ * bloom pass).
  *
  * Two fragment programs, both drawn on a single fullscreen triangle:
  *   - WAKE_FRAG    half-res RGBA8 ping-pong feedback: prev*decay + a soft splat
@@ -14,19 +15,20 @@
  *                  here — there is no separate blur pass.
  */
 
-export const VERTEX = /* glsl */ `
-attribute vec2 position;
-attribute vec2 uv;
-varying vec2 vUv;
+export const VERTEX = /* glsl */ `#version 300 es
+in vec2 position;
+in vec2 uv;
+out vec2 vUv;
 void main() {
   vUv = uv;
   gl_Position = vec4(position, 0.0, 1.0);
 }
 `;
 
-export const WAKE_FRAG = /* glsl */ `
+export const WAKE_FRAG = /* glsl */ `#version 300 es
 precision highp float;
-varying vec2 vUv;
+in vec2 vUv;
+out vec4 fragColor;
 
 uniform sampler2D tPrev;       // previous wake frame
 uniform float uAspect;         // w/h, to keep the splat round
@@ -39,20 +41,21 @@ uniform float uSigma;          // splat radius
 
 void main() {
   // Sample the previous frame slightly below, so the trail drifts upward.
-  vec3 prev = texture2D(tPrev, vUv + vec2(0.0, -uDrift)).rgb * uDecay;
+  vec3 prev = texture(tPrev, vUv + vec2(0.0, -uDrift)).rgb * uDecay;
 
   // Aspect-correct distance to the head so the deposited splat is circular.
   vec2 d = (vUv - uHead) * vec2(uAspect, 1.0);
   float g = exp(-dot(d, d) / (2.0 * uSigma * uSigma));
   vec3 splat = uHeadColor * (g * uHeadIntensity);
 
-  gl_FragColor = vec4(prev + splat, 1.0);
+  fragColor = vec4(prev + splat, 1.0);
 }
 `;
 
-export const DISPLAY_FRAG = /* glsl */ `
+export const DISPLAY_FRAG = /* glsl */ `#version 300 es
 precision highp float;
-varying vec2 vUv;
+in vec2 vUv;
+out vec4 fragColor;
 
 uniform sampler2D tCurve;      // 512x1 RGBA8: R=pHome, G=pAway, B=magnitude
 uniform sampler2D tWake;       // accumulated wake (history as light)
@@ -72,7 +75,7 @@ void main() {
   vec2 uv = vUv;
 
   // --- sample the belief curve at this match-time column -------------------
-  vec4 c = texture2D(tCurve, vec2(uv.x, 0.5));
+  vec4 c = texture(tCurve, vec2(uv.x, 0.5));
   float curveP = c.r;                  // pHome at this x
   float curveA = c.g;                  // pAway at this x
   float hist = step(uv.x, uHead);      // only the played-so-far region is real
@@ -93,7 +96,7 @@ void main() {
   col += sideCol * (core * 1.4 + band * hist + below * 0.10 * hist);
 
   // --- accumulated wake (the field of light) -------------------------------
-  col += texture2D(tWake, uv).rgb * 0.9;
+  col += texture(tWake, uv).rgb * 0.9;
 
   // --- the "now" head: bright dot + faint vertical sweep -------------------
   vec2 hd = (uv - vec2(uHead, uP)) * vec2(uAspect, 1.0);
@@ -124,6 +127,6 @@ void main() {
   col *= 1.0 - dot(vd, vd) * 0.8;
   col = col / (col + vec3(0.7)) * 1.7;
 
-  gl_FragColor = vec4(col, 1.0);
+  fragColor = vec4(col, 1.0);
 }
 `;

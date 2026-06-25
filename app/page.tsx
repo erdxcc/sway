@@ -22,12 +22,12 @@ export default function Home() {
           Live now
         </h2>
         <Link
-          href="/match/stub-hero"
+          href="/match/hero-comeback"
           className="group block rounded-card border border-border bg-surface/60 p-5 transition-colors hover:border-border-strong hover:bg-surface-2/60"
         >
           <div className="mb-1 flex items-center justify-between">
             <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">
-              Knockout (stub)
+              Knockout · recorded data
             </span>
             <span className="flex items-center gap-1.5 text-[11px] font-semibold text-accent-3">
               <span className="h-2 w-2 animate-pulse rounded-pill bg-accent-3" />
