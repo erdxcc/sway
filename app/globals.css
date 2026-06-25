@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ *
+ * Sway design tokens (Tailwind v4 CSS-first config).
+ * Inherited from the Kairos identity: near-black surfaces with a
+ * violet -> cyan -> teal accent ramp. Colors map to utilities like
+ * bg-surface / text-fg-muted / text-accent.
+ * ------------------------------------------------------------------ */
+@theme {
+  /* Surfaces */
+  --color-bg: #07070b; /* page background, near-black, slight cool */
+  --color-surface: #0e0e15; /* cards / raised panels */
+  --color-surface-2: #15151f; /* hover / nested surfaces */
+
+  /* Borders */
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
+
+  /* Foreground / text */
+  --color-fg: #f4f4f7; /* primary text */
+  --color-fg-muted: #8a8a99; /* secondary text */
+  --color-fg-faint: #5a5a68; /* tertiary / captions */
+
+  /* Accents (violet -> cyan -> teal) */
+  --color-accent: #8b5cf6; /* primary accent — violet */
+  --color-accent-2: #22d3ee; /* secondary accent — cyan */
+  --color-accent-3: #14f195; /* tertiary accent — Solana-ish teal/green */
+
+  /* Belief sides — home leans warm violet, away leans cool cyan, level neutral.
+   * Used by the HUD + capture card so the colour mapping is shared and a11y
+   * is reinforced by labels (never colour-only). */
+  --color-home: #8b5cf6;
+  --color-away: #22d3ee;
+  --color-level: #8a8a99;
+
+  /* Typography */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", "Cascadia Code",
+    monospace;
+
+  /* Radii */
+  --radius-card: 16px;
+  --radius-pill: 9999px;
+
+  /* Easing + durations used across native animations */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Shared brand gradient */
+  --gradient-brand: linear-gradient(
+    100deg,
+    var(--color-accent) 0%,
+    var(--color-accent-2) 52%,
+    var(--color-accent-3) 100%
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Base layer
+ * ------------------------------------------------------------------ */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    color-scheme: dark;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-accent) 38%, transparent);
+    color: var(--color-fg);
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Visible, consistent focus ring for keyboard users */
+  :focus-visible {
+    outline: 2px solid var(--color-accent-2);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Thin, dark scrollbars to match the theme */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Utilities / helpers
+ * ------------------------------------------------------------------ */
+@layer utilities {
+  /* Brand gradient text */
+  .text-gradient {
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Page rhythm */
+  .container-page {
+    width: 100%;
+    max-width: 78rem;
+    margin-inline: auto;
+    padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+  }
+
+  /* Hairline divider that fades at the edges */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-border-strong),
+      transparent
+    );
+  }
+
+  /* Static belief-field fallback — same palette + radial distribution as the
+   * WebGL field, so reduced-motion / no-WebGL / <768px transitions are
+   * seamless and the screen is never blank. */
+  .belief-fallback {
+    background:
+      radial-gradient(
+        70% 60% at 28% 30%,
+        color-mix(in oklab, var(--color-accent) 42%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        60% 55% at 76% 40%,
+        color-mix(in oklab, var(--color-accent-2) 36%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        80% 70% at 52% 86%,
+        color-mix(in oklab, var(--color-accent-3) 30%, transparent),
+        transparent 72%
+      ),
+      var(--color-bg);
+    filter: saturate(0.92);
+  }
+
+  /* Tabular numerics for live HUD readouts (minute / score / win-prob) so
+   * digits don't jitter as they tick. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
