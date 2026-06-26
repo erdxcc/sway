@@ -275,6 +275,23 @@ export class BeliefField {
     ctx.drawImage(wake, 0, 0);
     ctx.globalCompositeOperation = "source-over";
 
+    // faint curve for the other team, so both teams are always visible
+    if (head > 0) {
+      const otherCol = this.team === "home" ? AWAY : HOME;
+      const otherCurve = this.team === "home" ? this.curveA : this.curveH;
+      ctx.beginPath();
+      for (let i = 0; i <= head; i++) {
+        const x = xAt(i);
+        const y = yAt(otherCurve[i]);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.strokeStyle = rgba(otherCol, 0.3);
+      ctx.stroke();
+    }
+
     if (head > 0) {
       // filled body under the curve
       ctx.beginPath();

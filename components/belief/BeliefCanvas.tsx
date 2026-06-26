@@ -7,23 +7,34 @@ import { cn } from "@/lib/cn";
 import type { BeliefAdapter, BeliefTick } from "@/lib/data/contract";
 
 interface Props {
-  /** Data source — stub, live or replay; all emit the same tick. */
+  /** Data source — stub, replay, live or sandbox; all emit the same tick. */
   adapter: BeliefAdapter;
   /** Mirror each tick out to the parent (HUD state). */
   onTick?: (tick: BeliefTick) => void;
-  /** Receives the live field so the parent can call `snapshot()` at capture. */
+  /** Receives the live field so the parent can call `snapshot()` / `setTeam()`. */
   fieldRef?: React.MutableRefObject<BeliefField | null>;
+  /**
+   * Render the field even under reduced-motion / data-saver. The belief graph is
+   * content (a data visualisation), not decorative motion, so the landing page
+   * forces it on; the cheap 2D canvas is fine here.
+   */
+  forceMotion?: boolean;
   className?: string;
 }
 
 /**
- * React wrapper around {@link BeliefField}. Mounts the WebGL field, keeps it
- * sized + paused-when-hidden, and drives the adapter's ticks into it. Falls back
- * to a static gradient under reduced-motion / data-saver / no-WebGL so the
- * screen is never blank. The adapter still runs in the fallback case, so the HUD
- * stays live even without the field.
+ * React wrapper around {@link BeliefField}. Mounts the 2D field, keeps it sized +
+ * paused-when-hidden, and drives the adapter's ticks into it. Falls back to a
+ * static gradient under reduced-motion (unless `forceMotion`) so the screen is
+ * never blank; the adapter still runs in that case, so the HUD stays live.
  */
-export function BeliefCanvas({ adapter, onTick, fieldRef, className }: Props) {
+export function BeliefCanvas({
+  adapter,
+  onTick,
+  fieldRef,
+  forceMotion,
+  className,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fallbackRef = useRef<HTMLDivElement>(null);
 
@@ -44,7 +55,7 @@ export function BeliefCanvas({ adapter, onTick, fieldRef, className }: Props) {
       canvas.style.opacity = "0";
     };
 
-    if (!shouldReduceMotion()) {
+    if (forceMotion || !shouldReduceMotion()) {
       field = new BeliefField();
       const ok = field.mount(canvas, { fixture: adapter.fixture, maxDpr: 2 });
       if (!ok) {
@@ -78,7 +89,7 @@ export function BeliefCanvas({ adapter, onTick, fieldRef, className }: Props) {
       if (fieldRef) fieldRef.current = null;
       field?.destroy();
     };
-  }, [adapter, fieldRef]);
+  }, [adapter, fieldRef, forceMotion]);
 
   return (
     <div className={cn("relative h-full w-full overflow-hidden", className)}>

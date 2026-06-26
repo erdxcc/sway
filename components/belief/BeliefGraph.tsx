@@ -98,6 +98,7 @@ export function BeliefGraph() {
           adapter={adapter}
           onTick={setTick}
           fieldRef={fieldRef}
+          forceMotion
           className="absolute inset-0"
         />
         {/* HUD readouts */}
