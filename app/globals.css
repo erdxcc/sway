@@ -175,4 +175,65 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
   }
+
+  /* The two diagonal "silk highlight" sheen stripes from the Kairos hero,
+   * re-imported as static gradients (no fluid solver). Tinted per active team
+   * flag via --sheen-1 / --sheen-2 (set inline by <SheenStripes/>). */
+  .sheen-stripes {
+    --sheen-1: var(--color-accent);
+    --sheen-2: var(--color-accent-2);
+  }
+  .sheen-stripes .sheen {
+    position: absolute;
+    inset: -30% -20%;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    filter: blur(26px);
+    will-change: transform;
+  }
+  .sheen-stripes .sheen-1 {
+    background: linear-gradient(
+      112deg,
+      transparent 34%,
+      color-mix(in oklab, var(--sheen-1) 65%, transparent) 47%,
+      color-mix(in oklab, var(--sheen-1) 92%, transparent) 50%,
+      color-mix(in oklab, var(--sheen-1) 65%, transparent) 53%,
+      transparent 66%
+    );
+    opacity: 0.5;
+    animation: sheen-drift-1 14s var(--ease-in-out-soft) infinite alternate;
+  }
+  .sheen-stripes .sheen-2 {
+    background: linear-gradient(
+      112deg,
+      transparent 42%,
+      color-mix(in oklab, var(--sheen-2) 55%, transparent) 50%,
+      color-mix(in oklab, var(--sheen-2) 80%, transparent) 53%,
+      color-mix(in oklab, var(--sheen-2) 55%, transparent) 56%,
+      transparent 72%
+    );
+    opacity: 0.42;
+    animation: sheen-drift-2 18s var(--ease-in-out-soft) infinite alternate;
+  }
+  @keyframes sheen-drift-1 {
+    from {
+      transform: translateX(-8%);
+    }
+    to {
+      transform: translateX(10%);
+    }
+  }
+  @keyframes sheen-drift-2 {
+    from {
+      transform: translateX(12%);
+    }
+    to {
+      transform: translateX(-6%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sheen-stripes .sheen {
+      animation: none;
+    }
+  }
 }

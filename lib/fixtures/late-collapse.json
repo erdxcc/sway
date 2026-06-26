@@ -1,9 +1,9 @@
 {
   "fixture": {
     "fixtureId": "late-collapse",
-    "home": "Home",
-    "away": "Away",
-    "competition": "Knockout (recorded, synthetic)"
+    "home": "Brazil",
+    "away": "Germany",
+    "competition": "World Cup (recorded, synthetic)"
   },
   "events": [
     { "tMs": 0, "kind": "odds", "messageId": "lc-0000", "home": 1.85, "draw": 3.5, "away": 4.3, "minute": 0 },

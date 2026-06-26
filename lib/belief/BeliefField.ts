@@ -5,6 +5,7 @@ import {
   type MomentState,
   SAMPLE_COUNT,
 } from "@/lib/data/contract";
+import { teamColors } from "@/lib/teams";
 
 /**
  * BeliefField — the live belief-graph renderer, drawn on a **2D canvas**.
@@ -26,10 +27,7 @@ export interface BeliefFieldOptions {
 }
 
 const MATCH_MINUTES = 95;
-const BG = "#07070b";
 const FG = "#f4f4f7";
-const HOME = "#8b5cf6";
-const AWAY = "#22d3ee";
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
@@ -231,7 +229,10 @@ export class BeliefField {
     const H = canvas.height;
     const dpr = this.dpr;
     const m = 16 * dpr;
-    const col = this.team === "home" ? HOME : AWAY;
+    const col =
+      this.team === "home"
+        ? teamColors(this.fixture.home).primary
+        : teamColors(this.fixture.away).primary;
     const curve = this.team === "home" ? this.curveH : this.curveA;
     const last = this.last;
     const curProb = last ? (this.team === "home" ? last.pHome : last.pAway) : 0.5;
@@ -242,14 +243,14 @@ export class BeliefField {
     const hx = W - m;
     const hy = yAt(curProb);
 
-    // --- wake trail (offscreen): fade everything a little, stamp the head ----
-    const fade = Math.min(dt / 0.85, 0.2);
+    // --- wake trail (offscreen): faint, fast-fading glow behind the head -----
+    const fade = Math.min(dt / 0.5, 0.32);
     wctx.globalCompositeOperation = "destination-out";
     wctx.fillStyle = `rgba(0,0,0,${fade})`;
     wctx.fillRect(0, 0, W, H);
-    const r = (40 + this.burst * 130) * dpr + 26 * dpr;
+    const r = (14 + this.burst * 70) * dpr + 10 * dpr;
     const g = wctx.createRadialGradient(hx, hy, 0, hx, hy, r);
-    g.addColorStop(0, rgba(col, 0.45 + this.burst * 0.4));
+    g.addColorStop(0, rgba(col, 0.2 + this.burst * 0.32));
     g.addColorStop(1, rgba(col, 0));
     wctx.globalCompositeOperation = "lighter";
     wctx.fillStyle = g;
@@ -257,9 +258,11 @@ export class BeliefField {
     wctx.arc(hx, hy, r, 0, Math.PI * 2);
     wctx.fill();
 
-    // --- main canvas ---------------------------------------------------------
+    // --- main canvas: clear to transparent, then a soft veil so the silk
+    //     sheen-stripes mounted behind the canvas stay visible -----------------
     ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = BG;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(7,7,11,0.62)";
     ctx.fillRect(0, 0, W, H);
 
     // baseline (50%)
@@ -275,23 +278,8 @@ export class BeliefField {
     ctx.drawImage(wake, 0, 0);
     ctx.globalCompositeOperation = "source-over";
 
-    // faint curve for the other team, so both teams are always visible
-    if (head > 0) {
-      const otherCol = this.team === "home" ? AWAY : HOME;
-      const otherCurve = this.team === "home" ? this.curveA : this.curveH;
-      ctx.beginPath();
-      for (let i = 0; i <= head; i++) {
-        const x = xAt(i);
-        const y = yAt(otherCurve[i]);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.lineJoin = "round";
-      ctx.lineWidth = 1.5 * dpr;
-      ctx.strokeStyle = rgba(otherCol, 0.3);
-      ctx.stroke();
-    }
-
+    // Only the selected team's curve is drawn — clicking a team in the UI
+    // switches to that team's own graph (no overlaid second line).
     if (head > 0) {
       // filled body under the curve
       ctx.beginPath();
@@ -314,19 +302,19 @@ export class BeliefField {
         else ctx.lineTo(x, y);
       }
       ctx.lineJoin = "round";
-      ctx.lineWidth = 3 * dpr;
+      ctx.lineWidth = 2.5 * dpr;
       ctx.strokeStyle = col;
       ctx.shadowColor = col;
-      ctx.shadowBlur = 18 * dpr;
+      ctx.shadowBlur = 9 * dpr;
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // head dot
+      // head dot — small + subdued (only swells briefly on an event burst)
       ctx.beginPath();
-      ctx.arc(hx, hy, (4 + this.burst * 5) * dpr, 0, Math.PI * 2);
+      ctx.arc(hx, hy, (2.4 + this.burst * 3) * dpr, 0, Math.PI * 2);
       ctx.fillStyle = FG;
       ctx.shadowColor = col;
-      ctx.shadowBlur = (14 + this.burst * 24) * dpr;
+      ctx.shadowBlur = (5 + this.burst * 14) * dpr;
       ctx.fill();
       ctx.shadowBlur = 0;
     }

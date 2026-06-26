@@ -1,9 +1,9 @@
 {
   "fixture": {
     "fixtureId": "hero-comeback",
-    "home": "Home",
-    "away": "Away",
-    "competition": "Knockout (recorded, synthetic)"
+    "home": "Portugal",
+    "away": "Argentina",
+    "competition": "World Cup (recorded, synthetic)"
   },
   "events": [
     { "tMs": 0, "kind": "odds", "messageId": "hc-0000", "home": 1.72, "draw": 3.5, "away": 5.24, "minute": 0 },

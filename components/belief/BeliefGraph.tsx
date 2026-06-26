@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BeliefCanvas } from "./BeliefCanvas";
 import { CaptureModal } from "./CaptureModal";
+import { SheenStripes } from "./SheenStripes";
 import { ReplayAdapter, type ReplayFixture } from "@/lib/data/replayAdapter";
 import { ManualAdapter } from "@/lib/data/manualAdapter";
+import { teamColors } from "@/lib/teams";
 import { cn } from "@/lib/cn";
 import type {
   BeliefAdapter,
@@ -29,13 +31,13 @@ const MATCHES: MatchOption[] = [
   { id: "sandbox", label: "Sandbox", kind: "sandbox" },
   {
     id: "hero-comeback",
-    label: "Hero comeback",
+    label: "Portugal v Argentina",
     kind: "replay",
     fixture: heroComeback as unknown as ReplayFixture,
   },
   {
     id: "late-collapse",
-    label: "Late collapse",
+    label: "Brazil v Germany",
     kind: "replay",
     fixture: lateCollapse as unknown as ReplayFixture,
   },
@@ -89,20 +91,27 @@ export function BeliefGraph() {
   const sa = tick?.scoreAway ?? 0;
   const teamProb = team === "home" ? (tick?.pHome ?? 0.5) : (tick?.pAway ?? 0.5);
   const teamName = team === "home" ? adapter.fixture.home : adapter.fixture.away;
+  const teamCol = teamColors(teamName);
 
   return (
     <div className="space-y-4">
       {/* The graph */}
       <div className="relative h-[48vh] min-h-[300px] w-full overflow-hidden rounded-card border border-border bg-surface">
+        {/* The 2 silk sheen-stripes (Kairos), tinted by the active team flag */}
+        <SheenStripes
+          primary={teamCol.primary}
+          secondary={teamCol.secondary}
+          className="z-0"
+        />
         <BeliefCanvas
           adapter={adapter}
           onTick={setTick}
           fieldRef={fieldRef}
           forceMotion
-          className="absolute inset-0"
+          className="absolute inset-0 z-10"
         />
         {/* HUD readouts */}
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4">
+        <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-4">
           <div className="flex items-start justify-between">
             <span className="tnum rounded-pill bg-surface/70 px-3 py-1 text-xs font-semibold backdrop-blur-md">
               {tick?.suspended ? "SUSPENDED" : "LIVE"} · {minute}&apos;
@@ -117,9 +126,7 @@ export function BeliefGraph() {
             </div>
             <div
               className="tnum text-2xl font-bold"
-              style={{
-                color: team === "home" ? "var(--color-home)" : "var(--color-away)",
-              }}
+              style={{ color: teamCol.primary }}
             >
               {pct(teamProb)}
             </div>
@@ -158,29 +165,27 @@ export function BeliefGraph() {
             Team
           </span>
           <div className="flex gap-2">
-            {(["home", "away"] as Team[]).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTeam(t)}
-                className={cn(
-                  "rounded-pill px-4 py-1.5 text-sm font-semibold transition-colors",
-                  t === team ? "text-bg" : "bg-surface-2 text-fg-muted hover:text-fg",
-                )}
-                style={
-                  t === team
-                    ? {
-                        backgroundColor:
-                          t === "home"
-                            ? "var(--color-home)"
-                            : "var(--color-away)",
-                      }
-                    : undefined
-                }
-              >
-                {t === "home" ? adapter.fixture.home : adapter.fixture.away}
-              </button>
-            ))}
+            {(["home", "away"] as Team[]).map((t) => {
+              const name =
+                t === "home" ? adapter.fixture.home : adapter.fixture.away;
+              const c = teamColors(name);
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTeam(t)}
+                  className={cn(
+                    "rounded-pill px-4 py-1.5 text-sm font-semibold transition-colors",
+                    t === team
+                      ? "text-bg"
+                      : "bg-surface-2 text-fg-muted hover:text-fg",
+                  )}
+                  style={t === team ? { backgroundColor: c.primary } : undefined}
+                >
+                  {name}
+                </button>
+              );
+            })}
           </div>
         </div>
         <button

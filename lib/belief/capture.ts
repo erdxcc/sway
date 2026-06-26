@@ -1,4 +1,5 @@
 import { type MomentState } from "@/lib/data/contract";
+import { teamColors } from "@/lib/teams";
 import { hashSeed, makeRng } from "./seed";
 
 /**
@@ -46,9 +47,14 @@ function mixHex(a: string, b: string, t: number): string {
 }
 
 /** Favoured-side colour from the home/away split, matching the live field. */
-function sideColor(p: number, pAway: number): string {
+function sideColor(
+  p: number,
+  pAway: number,
+  homeCol: string,
+  awayCol: string,
+): string {
   const t = clamp((p - pAway) * 2 + 0.5, 0, 1);
-  return mixHex(AWAY, HOME, t);
+  return mixHex(awayCol, homeCol, t);
 }
 
 /** Render the card and resolve to a PNG blob. Client-only (uses canvas). */
@@ -82,7 +88,9 @@ function drawCard(
   m: MomentState,
 ): void {
   const M = 80;
-  const accent = sideColor(m.p, m.pAway);
+  const homeCol = teamColors(m.fixtureMeta.home).primary;
+  const awayCol = teamColors(m.fixtureMeta.away).primary;
+  const accent = sideColor(m.p, m.pAway, homeCol, awayCol);
   const favLabel =
     m.favorite === "home"
       ? m.fixtureMeta.home
@@ -282,27 +290,29 @@ function drawBeliefBar(
   const wDraw = (pDraw / total) * width;
   const wAway = (m.pAway / total) * width;
   const barH = 18;
+  const homeCol = teamColors(m.fixtureMeta.home).primary;
+  const awayCol = teamColors(m.fixtureMeta.away).primary;
 
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x, y, width, barH, barH / 2);
   ctx.clip();
-  ctx.fillStyle = HOME;
+  ctx.fillStyle = homeCol;
   ctx.fillRect(x, y, wHome, barH);
   ctx.fillStyle = mixHex(LEVEL, BG, 0.3);
   ctx.fillRect(x + wHome, y, wDraw, barH);
-  ctx.fillStyle = AWAY;
+  ctx.fillStyle = awayCol;
   ctx.fillRect(x + wHome + wDraw, y, wAway, barH);
   ctx.restore();
 
   ctx.font = `500 26px ${FONT}`;
   ctx.fillStyle = MUTED;
   ctx.textAlign = "left";
-  ctx.fillText(`${Math.round(m.p * 100)}% home`, x, y + barH + 40);
+  ctx.fillText(`${Math.round(m.p * 100)}% ${m.fixtureMeta.home}`, x, y + barH + 40);
   ctx.textAlign = "center";
   ctx.fillText(`${Math.round(pDraw * 100)}% draw`, x + width / 2, y + barH + 40);
   ctx.textAlign = "right";
-  ctx.fillText(`${Math.round(m.pAway * 100)}% away`, x + width, y + barH + 40);
+  ctx.fillText(`${Math.round(m.pAway * 100)}% ${m.fixtureMeta.away}`, x + width, y + barH + 40);
 }
 
 function drawBadge(

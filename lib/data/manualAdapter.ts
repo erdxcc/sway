@@ -42,8 +42,8 @@ export class ManualAdapter implements BeliefAdapter {
   constructor(fixture?: FixtureMeta) {
     this.fixture = fixture ?? {
       fixtureId: "sandbox",
-      home: "Home",
-      away: "Away",
+      home: "Spain",
+      away: "Netherlands",
       competition: "Sandbox",
     };
   }
