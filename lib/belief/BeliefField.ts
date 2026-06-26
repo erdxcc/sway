@@ -1,5 +1,3 @@
-import { Renderer, Program, Mesh, Triangle, RenderTarget, Texture } from "ogl";
-import { VERTEX, WAKE_FRAG, DISPLAY_FRAG } from "./shaders";
 import {
   type BeliefTick,
   type FixtureMeta,
@@ -9,55 +7,46 @@ import {
 } from "@/lib/data/contract";
 
 /**
- * BeliefField — the live, mobile-budgeted belief-field renderer.
+ * BeliefField — the live belief-graph renderer, drawn on a **2D canvas**.
  *
- * Reuses the OGL lifecycle skeleton of the Kairos `SilkField` (graceful-fallback
- * mount, dpr cap, visibility/in-view pause, dt-clamped RAF, ping-pong FBO) but
- * replaces the Navier–Stokes fluid passes with a lightweight pipeline:
- *   - a 512×1 RGBA8 data-texture holding the belief curve over match time,
- *     updated per tick (not per frame);
- *   - a half-res RGBA8 temporal "wake" (decaying glow of where belief has been);
- *   - a single full-res SDF display pass (line glow + soft field + head + burst).
- *
- * No float render targets and no separate bloom pass, so it runs on WebGL1 and
- * WebGL2 alike. Feed it with {@link pushTick}; freeze a {@link snapshot} for
- * the capture pipeline.
+ * (Originally a WebGL/OGL pipeline; that failed to link reliably across GPUs, so
+ * this is a robust Canvas-2D renderer instead — no shaders, works everywhere,
+ * and matches the deterministic capture-card look.) It keeps a per-minute curve
+ * for both teams, a fading "wake" trail on an offscreen canvas, and a glowing
+ * head that pops on events. Feed it with {@link pushTick}; freeze a
+ * {@link snapshot} for capture; switch the displayed team with {@link setTeam}.
  */
 
-type GL = Renderer["gl"];
-
-interface DoubleFBO {
-  read: RenderTarget;
-  write: RenderTarget;
-  swap(): void;
-}
+type Team = "home" | "away";
 
 export interface BeliefFieldOptions {
-  /** Cap on devicePixelRatio. Default 2 (drop to 1.5 / 1 on low-end). */
   maxDpr?: number;
-  /** Fixture identity (drives `snapshot().fixtureMeta`). */
   fixture?: FixtureMeta;
+  team?: Team;
 }
 
-/** Match length in minutes that maps to the full curve width (incl. stoppage). */
 const MATCH_MINUTES = 95;
-/** Long-edge cap (device px) for the half-res wake target. */
-const WAKE_MAX = 540;
+const BG = "#07070b";
+const FG = "#f4f4f7";
+const HOME = "#8b5cf6";
+const AWAY = "#22d3ee";
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
-/** Parse "#rrggbb" → normalised [r,g,b]. */
-function hex3(hex: string): [number, number, number] {
-  const n = parseInt(hex.replace("#", ""), 16);
-  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+function rgba(hex: string, a: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
 export class BeliefField {
-  private renderer: Renderer | null = null;
-  private gl: GL | null = null;
   private canvas: HTMLCanvasElement | null = null;
+  private ctx: CanvasRenderingContext2D | null = null;
+  private wake: HTMLCanvasElement | null = null;
+  private wctx: CanvasRenderingContext2D | null = null;
 
   private maxDpr = 2;
+  private dpr = 1;
+  private team: Team = "home";
   private fixture: FixtureMeta = {
     fixtureId: "unknown",
     home: "Home",
@@ -65,36 +54,15 @@ export class BeliefField {
     competition: "",
   };
 
-  // Belief curve store: one RGBA8 texel per sample (R=pHome,G=pAway,B=mag).
-  private curveU8 = new Uint8Array(SAMPLE_COUNT * 4);
-  private curveF = new Float32Array(SAMPLE_COUNT); // pHome, for the snapshot
+  // Per-minute curve for both teams (index = match-minute bucket).
+  private curveH = new Float32Array(SAMPLE_COUNT);
+  private curveA = new Float32Array(SAMPLE_COUNT);
   private lastIdx = -1;
-  private tCurve!: Texture;
-
-  private wake!: DoubleFBO;
-  private wakeW = 2;
-  private wakeH = 2;
-
-  private wakeMesh!: Mesh;
-  private displayMesh!: Mesh;
-
-  // Palette (matches the CSS tokens).
-  private cHome = hex3("#8b5cf6");
-  private cAway = hex3("#22d3ee");
-  private cLevel = hex3("#8a8a99");
-  private cBg = hex3("#07070b");
-  private scratchCol = new Float32Array(3);
-
-  // Live state.
   private last: BeliefTick | null = null;
   private burst = 0;
 
-  // Run state.
-  private aspect = 1;
-  private time = 0;
-  private lastFrame = 0;
-  private lastRender = 0;
   private raf = 0;
+  private lastFrame = 0;
   private mounted = false;
   private visible = true;
   private inView = true;
@@ -104,46 +72,33 @@ export class BeliefField {
     this.updateRunState();
   };
 
-  /** Initialise GL + pipeline. Returns false if WebGL is unavailable. */
   mount(canvas: HTMLCanvasElement, opts: BeliefFieldOptions = {}): boolean {
     this.canvas = canvas;
     this.maxDpr = opts.maxDpr ?? 2;
     if (opts.fixture) this.fixture = opts.fixture;
+    if (opts.team) this.team = opts.team;
 
-    let renderer: Renderer;
-    try {
-      const dpr = Math.min(window.devicePixelRatio || 1, this.maxDpr);
-      renderer = new Renderer({
-        canvas,
-        width: canvas.clientWidth || 1,
-        height: canvas.clientHeight || 1,
-        dpr,
-        alpha: false,
-        antialias: false,
-        depth: false,
-        powerPreference: "high-performance",
-      });
-    } catch {
-      return false; // no WebGL at all → caller shows the static fallback
-    }
-    if (!renderer.gl) return false;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return false;
+    this.ctx = ctx;
 
-    this.renderer = renderer;
-    this.gl = renderer.gl;
+    this.wake = document.createElement("canvas");
+    this.wctx = this.wake.getContext("2d");
 
-    this.initCurveTexture();
-    this.initPrograms();
-    this.resize(); // sizes the renderer + builds the wake targets
+    this.clearCurve();
+    this.resize();
 
     this.mounted = true;
     this.lastFrame = performance.now();
-    this.lastRender = this.lastFrame;
-
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", this.onVisibility);
     }
     this.updateRunState();
     return true;
+  }
+
+  setTeam(team: Team): void {
+    this.team = team;
   }
 
   setInView(inView: boolean): void {
@@ -156,32 +111,19 @@ export class BeliefField {
   }
 
   resize(): void {
-    if (!this.renderer || !this.canvas) return;
+    if (!this.canvas) return;
     const dpr = Math.min(window.devicePixelRatio || 1, this.maxDpr);
-    this.renderer.dpr = dpr;
-    const w = this.canvas.clientWidth || 1;
-    const h = this.canvas.clientHeight || 1;
-    this.renderer.setSize(w, h);
-    this.aspect = w / h;
-
-    // (Re)build the half-res wake targets at the new size.
-    const long = Math.max(w, h) * dpr * 0.5;
-    const scale = long > WAKE_MAX ? WAKE_MAX / long : 1;
-    this.wakeW = Math.max(2, Math.round(w * dpr * 0.5 * scale));
-    this.wakeH = Math.max(2, Math.round(h * dpr * 0.5 * scale));
-    this.wake = this.makeDoubleFBO(this.wakeW, this.wakeH);
-    this.clearRT(this.wake.read);
-    this.clearRT(this.wake.write);
-
-    if (this.wakeMesh) this.wakeMesh.program.uniforms.uAspect.value = this.aspect;
-    if (this.displayMesh)
-      this.displayMesh.program.uniforms.uAspect.value = this.aspect;
+    this.dpr = dpr;
+    const w = Math.max(1, Math.round((this.canvas.clientWidth || 1) * dpr));
+    const h = Math.max(1, Math.round((this.canvas.clientHeight || 1) * dpr));
+    this.canvas.width = w;
+    this.canvas.height = h;
+    if (this.wake) {
+      this.wake.width = w;
+      this.wake.height = h;
+    }
   }
 
-  /**
-   * Feed one normalised tick: write it into the curve texture, advance the head,
-   * and arm an event burst. Cheap — touches the GPU only via a small texSubImage.
-   */
   pushTick(t: BeliefTick): void {
     const idx = Math.max(
       0,
@@ -190,28 +132,14 @@ export class BeliefField {
         Math.floor((t.minute / MATCH_MINUTES) * SAMPLE_COUNT),
       ),
     );
-
-    // A jump backwards means the source looped/restarted — clear and rewind.
     if (idx < this.lastIdx - 2) this.clearCurve();
 
     const from = this.lastIdx < 0 ? idx : this.lastIdx + 1;
-    const r = Math.round(clamp01(t.pHome) * 255);
-    const g = Math.round(clamp01(t.pAway) * 255);
-    const b = Math.round(clamp01(t.magnitude) * 255);
     for (let i = Math.min(from, idx); i <= idx; i++) {
-      const o = i * 4;
-      this.curveU8[o] = r;
-      this.curveU8[o + 1] = g;
-      this.curveU8[o + 2] = b;
-      this.curveU8[o + 3] = 255;
-      this.curveF[i] = t.pHome;
+      this.curveH[i] = clamp01(t.pHome);
+      this.curveA[i] = clamp01(t.pAway);
     }
     this.lastIdx = Math.max(this.lastIdx, idx);
-
-    if (this.tCurve) {
-      this.tCurve.image = this.curveU8;
-      this.tCurve.needsUpdate = true;
-    }
 
     if (t.event !== "drift" && t.event !== "suspend") {
       this.burst = Math.max(this.burst, t.magnitude);
@@ -219,11 +147,10 @@ export class BeliefField {
     this.last = t;
   }
 
-  /** Freeze the current state into a capture-ready, self-contained snapshot. */
   snapshot(merkleProof: MerkleProof | null = null): MomentState {
     const last = this.last;
     return {
-      curveSamples: this.curveF.slice(0, SAMPLE_COUNT),
+      curveSamples: this.curveH.slice(0, SAMPLE_COUNT),
       p: last ? last.pHome : 0.5,
       pAway: last ? last.pAway : 0.25,
       minute: last ? last.minute : 0,
@@ -249,132 +176,23 @@ export class BeliefField {
     if (typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", this.onVisibility);
     }
-    const gl = this.gl;
-    if (gl) gl.getExtension("WEBGL_lose_context")?.loseContext();
-    this.renderer = null;
-    this.gl = null;
     this.canvas = null;
+    this.ctx = null;
+    this.wake = null;
+    this.wctx = null;
   }
 
   // ----------------------------------------------------------------------- //
   // Internals
   // ----------------------------------------------------------------------- //
 
-  private initCurveTexture(): void {
-    const gl = this.gl!;
-    this.clearCurve();
-    this.tCurve = new Texture(gl, {
-      image: this.curveU8,
-      width: SAMPLE_COUNT,
-      height: 1,
-      generateMipmaps: false,
-      flipY: false,
-      minFilter: gl.LINEAR,
-      magFilter: gl.LINEAR,
-      wrapS: gl.CLAMP_TO_EDGE,
-      wrapT: gl.CLAMP_TO_EDGE,
-    });
-  }
-
   private clearCurve(): void {
-    this.curveU8.fill(0);
-    for (let i = 0; i < SAMPLE_COUNT; i++) this.curveU8[i * 4 + 3] = 255;
-    this.curveF.fill(0);
+    this.curveH.fill(0);
+    this.curveA.fill(0);
     this.lastIdx = -1;
-    if (this.gl && this.wake) {
-      this.clearRT(this.wake.read);
-      this.clearRT(this.wake.write);
+    if (this.wctx && this.wake) {
+      this.wctx.clearRect(0, 0, this.wake.width, this.wake.height);
     }
-  }
-
-  private makeFBO(w: number, h: number): RenderTarget {
-    const gl = this.gl!;
-    return new RenderTarget(gl, {
-      width: w,
-      height: h,
-      depth: false,
-      minFilter: gl.LINEAR,
-      magFilter: gl.LINEAR,
-      wrapS: gl.CLAMP_TO_EDGE,
-      wrapT: gl.CLAMP_TO_EDGE,
-    });
-  }
-
-  private makeDoubleFBO(w: number, h: number): DoubleFBO {
-    const fbo: DoubleFBO = {
-      read: this.makeFBO(w, h),
-      write: this.makeFBO(w, h),
-      swap() {
-        const t = this.read;
-        this.read = this.write;
-        this.write = t;
-      },
-    };
-    return fbo;
-  }
-
-  private clearRT(rt: RenderTarget): void {
-    const gl = this.gl!;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, rt.buffer);
-    gl.viewport(0, 0, rt.width, rt.height);
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  }
-
-  private makeMesh(
-    fragment: string,
-    uniforms: Record<string, { value: unknown }>,
-  ): Mesh {
-    const gl = this.gl!;
-    const program = new Program(gl, {
-      vertex: VERTEX,
-      fragment,
-      uniforms,
-      depthTest: false,
-      depthWrite: false,
-      transparent: false,
-    });
-    return new Mesh(gl, { geometry: new Triangle(gl), program });
-  }
-
-  private initPrograms(): void {
-    this.wakeMesh = this.makeMesh(WAKE_FRAG, {
-      tPrev: { value: null },
-      uAspect: { value: this.aspect },
-      uDecay: { value: 0.96 },
-      uDrift: { value: 0.0016 },
-      uHead: { value: new Float32Array([0, 0.5]) },
-      uHeadColor: { value: new Float32Array(this.cLevel) },
-      uHeadIntensity: { value: 0.12 },
-      uSigma: { value: 0.05 },
-    });
-
-    this.displayMesh = this.makeMesh(DISPLAY_FRAG, {
-      tCurve: { value: this.tCurve },
-      tWake: { value: null },
-      uAspect: { value: this.aspect },
-      uTime: { value: 0 },
-      uHead: { value: 0 },
-      uP: { value: 0.5 },
-      uPAway: { value: 0.25 },
-      uBurst: { value: 0 },
-      uSuspended: { value: 0 },
-      uColorHome: { value: new Float32Array(this.cHome) },
-      uColorAway: { value: new Float32Array(this.cAway) },
-      uColorLevel: { value: new Float32Array(this.cLevel) },
-      uColorBg: { value: new Float32Array(this.cBg) },
-    });
-  }
-
-  /** Lerp the favoured-side colour into the reused scratch array. */
-  private sideColor(p: number, pAway: number, dim: number): Float32Array {
-    const t = clamp01((p - pAway) * 2.0 + 0.5);
-    for (let i = 0; i < 3; i++) {
-      this.scratchCol[i] =
-        (this.cAway[i] + (this.cHome[i] - this.cAway[i]) * t) * dim;
-    }
-    return this.scratchCol;
   }
 
   private updateRunState(): void {
@@ -395,61 +213,111 @@ export class BeliefField {
 
   private loop = (now: number): void => {
     this.raf = requestAnimationFrame(this.loop);
-
-    // Variable framerate: ~34fps while drifting, ramp to ~60 on/after an event,
-    // so the field is calm and battery-cheap until drama, then fluid.
-    const active = this.burst > 0.04;
-    const minInterval = 1000 / (active ? 60 : 34);
-    if (now - this.lastRender < minInterval) return;
-
     const dt = Math.min((now - this.lastFrame) / 1000, 1 / 20);
     this.lastFrame = now;
-    this.lastRender = now;
-    this.time += dt;
-    this.step(dt);
+    this.draw(dt);
+    this.burst *= Math.exp(-dt / 0.5);
+    if (this.burst < 0.004) this.burst = 0;
   };
 
-  private blit(mesh: Mesh, target: RenderTarget | null): void {
-    this.renderer!.render({ scene: mesh, target: target ?? undefined });
-  }
+  private draw(dt: number): void {
+    const ctx = this.ctx;
+    const canvas = this.canvas;
+    const wake = this.wake;
+    const wctx = this.wctx;
+    if (!ctx || !canvas || !wake || !wctx) return;
 
-  private step(dt: number): void {
-    if (!this.renderer) return;
+    const W = canvas.width;
+    const H = canvas.height;
+    const dpr = this.dpr;
+    const m = 16 * dpr;
+    const col = this.team === "home" ? HOME : AWAY;
+    const curve = this.team === "home" ? this.curveH : this.curveA;
     const last = this.last;
-    const head = last ? clamp01(last.minute / MATCH_MINUTES) : 0;
-    const p = last ? last.pHome : 0.5;
-    const pAway = last ? last.pAway : 0.25;
-    const suspended = last ? last.suspended : false;
+    const curProb = last ? (this.team === "home" ? last.pHome : last.pAway) : 0.5;
+    const head = this.lastIdx < 1 ? 0 : this.lastIdx;
 
-    // 1. Wake feedback (half-res): decay the trail, deposit a splat at the head.
-    const decay = Math.exp(-dt / 0.85); // time-consistent regardless of fps
-    const wu = this.wakeMesh.program.uniforms;
-    wu.tPrev.value = this.wake.read.texture;
-    wu.uAspect.value = this.aspect;
-    wu.uDecay.value = decay;
-    (wu.uHead.value as Float32Array).set([head, p]);
-    (wu.uHeadColor.value as Float32Array).set(
-      this.sideColor(p, pAway, suspended ? 0.35 : 1),
-    );
-    wu.uHeadIntensity.value = (0.1 + this.burst * 0.7) * (suspended ? 0.3 : 1);
-    this.blit(this.wakeMesh, this.wake.write);
-    this.wake.swap();
+    const xAt = (i: number) => m + (head > 0 ? i / head : 0) * (W - 2 * m);
+    const yAt = (p: number) => H - m - clamp01(p) * (H - 2 * m);
+    const hx = W - m;
+    const hy = yAt(curProb);
 
-    // 2. Display pass (full-res to screen).
-    const du = this.displayMesh.program.uniforms;
-    du.tCurve.value = this.tCurve;
-    du.tWake.value = this.wake.read.texture;
-    du.uAspect.value = this.aspect;
-    du.uTime.value = this.time;
-    du.uHead.value = head;
-    du.uP.value = p;
-    du.uPAway.value = pAway;
-    du.uBurst.value = this.burst;
-    du.uSuspended.value = suspended ? 1 : 0;
-    this.blit(this.displayMesh, null);
+    // --- wake trail (offscreen): fade everything a little, stamp the head ----
+    const fade = Math.min(dt / 0.85, 0.2);
+    wctx.globalCompositeOperation = "destination-out";
+    wctx.fillStyle = `rgba(0,0,0,${fade})`;
+    wctx.fillRect(0, 0, W, H);
+    const r = (40 + this.burst * 130) * dpr + 26 * dpr;
+    const g = wctx.createRadialGradient(hx, hy, 0, hx, hy, r);
+    g.addColorStop(0, rgba(col, 0.45 + this.burst * 0.4));
+    g.addColorStop(1, rgba(col, 0));
+    wctx.globalCompositeOperation = "lighter";
+    wctx.fillStyle = g;
+    wctx.beginPath();
+    wctx.arc(hx, hy, r, 0, Math.PI * 2);
+    wctx.fill();
 
-    // 3. Decay the event burst (time-consistent).
-    this.burst *= Math.exp(-dt / 0.45);
-    if (this.burst < 0.004) this.burst = 0;
+    // --- main canvas ---------------------------------------------------------
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = BG;
+    ctx.fillRect(0, 0, W, H);
+
+    // baseline (50%)
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.lineWidth = 1 * dpr;
+    ctx.beginPath();
+    ctx.moveTo(m, yAt(0.5));
+    ctx.lineTo(W - m, yAt(0.5));
+    ctx.stroke();
+
+    // wake glow (additive)
+    ctx.globalCompositeOperation = "lighter";
+    ctx.drawImage(wake, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+
+    if (head > 0) {
+      // filled body under the curve
+      ctx.beginPath();
+      ctx.moveTo(xAt(0), H - m);
+      for (let i = 0; i <= head; i++) ctx.lineTo(xAt(i), yAt(curve[i]));
+      ctx.lineTo(xAt(head), H - m);
+      ctx.closePath();
+      const fg = ctx.createLinearGradient(0, m, 0, H - m);
+      fg.addColorStop(0, rgba(col, 0.22));
+      fg.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = fg;
+      ctx.fill();
+
+      // glowing line
+      ctx.beginPath();
+      for (let i = 0; i <= head; i++) {
+        const x = xAt(i);
+        const y = yAt(curve[i]);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 3 * dpr;
+      ctx.strokeStyle = col;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 18 * dpr;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // head dot
+      ctx.beginPath();
+      ctx.arc(hx, hy, (4 + this.burst * 5) * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = FG;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = (14 + this.burst * 24) * dpr;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // suspended: dim the whole field (frozen)
+    if (last?.suspended) {
+      ctx.fillStyle = "rgba(7,7,11,0.5)";
+      ctx.fillRect(0, 0, W, H);
+    }
   }
 }

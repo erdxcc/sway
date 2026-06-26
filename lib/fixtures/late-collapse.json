@@ -1,0 +1,30 @@
+{
+  "fixture": {
+    "fixtureId": "late-collapse",
+    "home": "Home",
+    "away": "Away",
+    "competition": "Knockout (recorded, synthetic)"
+  },
+  "events": [
+    { "tMs": 0, "kind": "odds", "messageId": "lc-0000", "home": 1.85, "draw": 3.5, "away": 4.3, "minute": 0 },
+    { "tMs": 0, "kind": "score", "scoreHome": 0, "scoreAway": 0, "minute": 0 },
+    { "tMs": 1170000, "kind": "suspend", "minute": 20 },
+    { "tMs": 1200000, "kind": "score", "scoreHome": 1, "scoreAway": 0, "minute": 20 },
+    { "tMs": 1200000, "kind": "odds", "messageId": "lc-0020", "home": 1.4, "draw": 4.8, "away": 8.5, "minute": 20 },
+    { "tMs": 3270000, "kind": "suspend", "minute": 55 },
+    { "tMs": 3300000, "kind": "score", "scoreHome": 2, "scoreAway": 0, "minute": 55 },
+    { "tMs": 3300000, "kind": "odds", "messageId": "lc-0055", "home": 1.12, "draw": 8.5, "away": 19.0, "minute": 55 },
+    { "tMs": 4170000, "kind": "suspend", "minute": 70 },
+    { "tMs": 4200000, "kind": "score", "scoreHome": 2, "scoreAway": 1, "minute": 70 },
+    { "tMs": 4200000, "kind": "odds", "messageId": "lc-0070", "home": 1.45, "draw": 4.6, "away": 6.8, "minute": 70 },
+    { "tMs": 4890000, "kind": "suspend", "minute": 82 },
+    { "tMs": 4920000, "kind": "score", "scoreHome": 2, "scoreAway": 2, "minute": 82 },
+    { "tMs": 4920000, "kind": "odds", "messageId": "lc-0082", "home": 2.7, "draw": 3.2, "away": 2.7, "minute": 82 },
+    { "tMs": 5310000, "kind": "suspend", "minute": 89 },
+    { "tMs": 5340000, "kind": "score", "scoreHome": 2, "scoreAway": 3, "minute": 89 },
+    { "tMs": 5340000, "kind": "odds", "messageId": "lc-0089", "home": 12.0, "draw": 6.5, "away": 1.25, "minute": 89 },
+    { "tMs": 5640000, "kind": "odds", "messageId": "lc-0094", "home": 15.0, "draw": 7.5, "away": 1.18, "minute": 94 },
+    { "tMs": 5640000, "kind": "whistle", "minute": 94 }
+  ],
+  "proofs": {}
+}
