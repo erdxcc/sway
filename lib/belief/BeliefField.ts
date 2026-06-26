@@ -293,7 +293,10 @@ export class BeliefField {
       ctx.fillStyle = fg;
       ctx.fill();
 
-      // glowing line
+      // glowing line — a soft wide under-stroke + a crisp top stroke. This
+      // reads as a glow WITHOUT per-frame ctx.shadowBlur, which Canvas 2D
+      // rasterises over the whole ~500-point path every frame (a major stall
+      // regardless of GPU power).
       ctx.beginPath();
       for (let i = 0; i <= head; i++) {
         const x = xAt(i);
@@ -302,12 +305,13 @@ export class BeliefField {
         else ctx.lineTo(x, y);
       }
       ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.lineWidth = 7 * dpr;
+      ctx.strokeStyle = rgba(col, 0.16);
+      ctx.stroke();
       ctx.lineWidth = 2.5 * dpr;
       ctx.strokeStyle = col;
-      ctx.shadowColor = col;
-      ctx.shadowBlur = 9 * dpr;
       ctx.stroke();
-      ctx.shadowBlur = 0;
 
       // head dot — small + subdued (only swells briefly on an event burst)
       ctx.beginPath();

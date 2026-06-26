@@ -183,37 +183,39 @@
     --sheen-1: var(--color-accent);
     --sheen-2: var(--color-accent-2);
   }
+  /* No mix-blend-mode and only a light blur: the band is a transform-only
+   * animation on a promoted layer, so the compositor never re-reads the
+   * backdrop per frame. Wide transparent gradient stops carry the softness. */
   .sheen-stripes .sheen {
     position: absolute;
     inset: -30% -20%;
     pointer-events: none;
-    mix-blend-mode: screen;
-    filter: blur(26px);
+    filter: blur(10px);
     will-change: transform;
   }
   .sheen-stripes .sheen-1 {
     background: linear-gradient(
       112deg,
-      transparent 34%,
-      color-mix(in oklab, var(--sheen-1) 65%, transparent) 47%,
-      color-mix(in oklab, var(--sheen-1) 92%, transparent) 50%,
-      color-mix(in oklab, var(--sheen-1) 65%, transparent) 53%,
-      transparent 66%
+      transparent 28%,
+      color-mix(in oklab, var(--sheen-1) 45%, transparent) 46%,
+      color-mix(in oklab, var(--sheen-1) 70%, transparent) 50%,
+      color-mix(in oklab, var(--sheen-1) 45%, transparent) 54%,
+      transparent 72%
     );
-    opacity: 0.5;
-    animation: sheen-drift-1 14s var(--ease-in-out-soft) infinite alternate;
+    opacity: 0.55;
+    animation: sheen-drift-1 16s var(--ease-in-out-soft) infinite alternate;
   }
   .sheen-stripes .sheen-2 {
     background: linear-gradient(
       112deg,
-      transparent 42%,
-      color-mix(in oklab, var(--sheen-2) 55%, transparent) 50%,
-      color-mix(in oklab, var(--sheen-2) 80%, transparent) 53%,
-      color-mix(in oklab, var(--sheen-2) 55%, transparent) 56%,
-      transparent 72%
+      transparent 38%,
+      color-mix(in oklab, var(--sheen-2) 38%, transparent) 50%,
+      color-mix(in oklab, var(--sheen-2) 58%, transparent) 53%,
+      color-mix(in oklab, var(--sheen-2) 38%, transparent) 56%,
+      transparent 76%
     );
-    opacity: 0.42;
-    animation: sheen-drift-2 18s var(--ease-in-out-soft) infinite alternate;
+    opacity: 0.45;
+    animation: sheen-drift-2 20s var(--ease-in-out-soft) infinite alternate;
   }
   @keyframes sheen-drift-1 {
     from {
