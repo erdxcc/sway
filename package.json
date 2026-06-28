@@ -16,11 +16,15 @@
     "react-dom": "19.2.7"
   },
   "devDependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
     "@tailwindcss/postcss": "4.3.1",
     "@types/node": "^20.19.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "tailwindcss": "4.3.1",
+    "tweetnacl": "^1.0.3",
     "typescript": "6.0.3"
   }
 }
