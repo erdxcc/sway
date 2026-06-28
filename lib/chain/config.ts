@@ -21,25 +21,46 @@ export const RPC_URL =
     ? "https://api.mainnet-beta.solana.com"
     : "https://api.devnet.solana.com");
 
-/** TxLINE REST base (auth, snapshots, Merkle proofs). */
-export const TXLINE_REST_BASE = "https://txline.txodds.com";
+/**
+ * Auth host — guest session (`/auth/guest/start`) + token activation
+ * (`/api/token/activate`). Same on devnet + mainnet per the TxLINE docs.
+ */
+export const TXLINE_AUTH_BASE = "https://txline.txodds.com";
+
+/** Back-compat alias for the auth host. */
+export const TXLINE_REST_BASE = TXLINE_AUTH_BASE;
 
 /**
- * TxLINE Solana program + token addresses, verbatim from the TxLINE docs.
- * Devnet is the hackathon target; mainnet kept for reference.
+ * TxLINE Solana program + token addresses + the data API endpoint, verbatim
+ * from the TxLINE docs (programs/addresses). Devnet is the hackathon target —
+ * note its data API lives on a separate host; mainnet kept for reference.
  */
 export const TXLINE = {
   devnet: {
     programId: "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J",
     txlMint: "4Zao8ocPhmMgq7PdsYWyxvqySMGx7xb9cMftPMkEokRG",
     usdtMint: "ELWTKspHKCnCfCiCiqYw1EDH77k8VCP74dK9qytG2Ujh",
+    apiEndpoint: "https://txline-dev.txodds.com/api",
   },
   "mainnet-beta": {
     programId: "9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA",
     txlMint: "Zhw9TVKp68a1QrftncMSd6ELXKDtpVMNuMGr1jNwdeL",
     usdtMint: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+    apiEndpoint: "https://txline.txodds.com/api",
   },
 } as const;
+
+/**
+ * Free World Cup / International-Friendlies tiers — **no TxL payment**, the
+ * subscribe tx only registers on-chain. Use these as the `SERVICE_LEVEL_ID`.
+ */
+export const SERVICE_LEVELS = { delayed: 1, realtime: 12 } as const;
+
+/** Subscribe for 4 weeks at a time (docs minimum). */
+export const DEFAULT_DURATION_WEEKS = 4;
+
+/** Empty league list = the standard World Cup bundle. */
+export const DEFAULT_LEAGUES: readonly number[] = [];
 
 /** PDA seeds for the TxLINE program (identical on both networks). */
 export const TXLINE_SEEDS = {

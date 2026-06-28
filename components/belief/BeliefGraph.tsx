@@ -16,6 +16,7 @@ import type {
 import type { BeliefField } from "@/lib/belief/BeliefField";
 import heroComeback from "@/lib/fixtures/hero-comeback.json";
 import lateCollapse from "@/lib/fixtures/late-collapse.json";
+import finalThriller from "@/lib/fixtures/final-thriller.json";
 
 type Team = "home" | "away";
 
@@ -40,6 +41,12 @@ const MATCHES: MatchOption[] = [
     label: "Brazil v Germany",
     kind: "replay",
     fixture: lateCollapse as unknown as ReplayFixture,
+  },
+  {
+    id: "final-thriller",
+    label: "Argentina v France",
+    kind: "replay",
+    fixture: finalThriller as unknown as ReplayFixture,
   },
 ];
 
